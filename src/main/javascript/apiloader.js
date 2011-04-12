@@ -59,8 +59,9 @@ var ApiLoader = (function (ApiLoader, window, document)
             if (that._isLoaded || (scriptElem.readyState && scriptElem.readyState !== "complete" && scriptElem.readyState !== "loaded")) {
               return false;
             }
-            debug.debug('ApiLoader - Internal callback called',api.name);
+            that._isLoaded = true;
             scriptElem.onload = scriptElem.onreadystatechange = null;
+            debug.debug('ApiLoader - Internal callback called',api.name);
             that.onApiLoaded(callbacks);
           };
         }
