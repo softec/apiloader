@@ -108,6 +108,8 @@ var ApiLoader = (function (ApiLoader, window, document)
     var result = null;
     if( !(result = apis[api]) ) {
       result = apis[api] = new Api(api, callbacks);
+    } else if( callbacks && Object.isFunction(callbacks.onSuccess) ) {
+      window.setTimeout(function() { callbacks.onSuccess(result) },0);
     }
     return result;
   };
