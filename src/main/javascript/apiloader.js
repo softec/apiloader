@@ -14,6 +14,11 @@
 var ApiLoader = (function (ApiLoader, window, document)
 {
   var apis = {},
+      getNativeApi = function(name) { 
+        try {
+          return eval(name); 
+        } catch(e) {}
+      },
   Api = Class.create({
     initialize: function(api, callbacks) {
       var that = this,
@@ -21,14 +26,17 @@ var ApiLoader = (function (ApiLoader, window, document)
           apicallback = api.callback;
 
       this.api = api;
+      if( this.api.spacename && !this.api.name ) {
+        this.api.name = this.api.namespace;
+      }
       this._isLoaded = false;
 
-      debug.debug('ApiLoader - Loading API',api.namespace,api,callbacks);
+      debug.debug('ApiLoader - Loading API',api.name,api,callbacks);
 
       if( Object.isFunction(api.setCallback) ) {
-        debug.debug('ApiLoader - Set external callback',api.namespace);
+        debug.debug('ApiLoader - Set external callback',api.name);
         api.setCallback(function() {
-          debug.debug('ApiLoader - External callback called',api.namespace);
+          debug.debug('ApiLoader - External callback called',api.name);
           that.onApiLoaded(callbacks);
         })
       }
@@ -37,7 +45,7 @@ var ApiLoader = (function (ApiLoader, window, document)
       this._loadTask = window.setTimeout(function () {
         if ("item" in head) { // check if ref is still a live node list
           if (!head[0]) { // append_to node not yet ready
-              debug.debug('ApiLoader - Waiting for a usable head node',api.namespace);
+              debug.debug('ApiLoader - Waiting for a usable head node',api.name);
               setTimeout(arguments.callee, 25);
               return;
           }
@@ -46,12 +54,12 @@ var ApiLoader = (function (ApiLoader, window, document)
 
         var scriptElem = document.createElement("script");
         if( !Object.isFunction(api.setCallback) ) {
-          debug.debug('ApiLoader - Set internal callback',api.namespace);
+          debug.debug('ApiLoader - Set internal callback',api.name);
           scriptElem.onload = scriptElem.onreadystatechange = function () {
             if (that._isLoaded || (scriptElem.readyState && scriptElem.readyState !== "complete" && scriptElem.readyState !== "loaded")) {
               return false;
             }
-            debug.debug('ApiLoader - Internal callback called',api.namespace);
+            debug.debug('ApiLoader - Internal callback called',api.name);
             scriptElem.onload = scriptElem.onreadystatechange = null;
             that.onApiLoaded(callbacks);
           };
@@ -59,7 +67,7 @@ var ApiLoader = (function (ApiLoader, window, document)
         scriptElem.src = that.api.url;
         head.insertBefore(scriptElem, head.firstChild);
         that._failTask = window.setTimeout(function () {
-          debug.debug('ApiLoader - Internal failure callback called',api.namespace);
+          debug.debug('ApiLoader - Internal failure callback called',api.name);
           that.onApiFailed(callbacks)
         }, 10000);
       }, 0);
@@ -70,13 +78,12 @@ var ApiLoader = (function (ApiLoader, window, document)
       delete this._failTask;
       delete this._loadTask;
       this._isLoaded = true;
-      try {
-        this.nativeApi = eval(this.api.namespace);
-      } catch(e) {}
-      if( Object.isUndefined(this.nativeApi) ) {
-        delete this.nativeApi;
-        delete apis[this.api];
-        debug.debug('ApiLoader - Failure to retrieve native API',this.api.namespace);
+      if( this.api.namespace ) {
+        this.nativeApi = getNativeApi(this.api.namespace);
+      }
+      if( this.api.namespace && Object.isUndefined(this.nativeApi) ) {
+        delete apis[this.api.url];
+        debug.debug('ApiLoader - Failure to retrieve native API',this.api.name);
         if( callbacks && Object.isFunction(callbacks.onFailure) ) {
           callbacks.onFailure(this);
         }
@@ -85,6 +92,9 @@ var ApiLoader = (function (ApiLoader, window, document)
         if( callbacks && Object.isFunction(callbacks.onSuccess) ) {
           callbacks.onSuccess(this);
         }
+        if( !this.api.namespace ) {
+          delete apis[this.api.url]; // Do not keep the API if it has no global namespace
+        }
       }
     },
 
@@ -92,8 +102,8 @@ var ApiLoader = (function (ApiLoader, window, document)
       window.clearTimeout(this._loadTask);
       delete this._failTask;
       delete this._loadTask;
-      delete apis[this.api];
-      debug.debug('ApiLoader - Library fails to load',this.api.namespace);          
+      delete apis[this.api.url];
+      debug.debug('ApiLoader - Library fails to load',this.api.name);          
       if( callbacks && Object.isFunction(callbacks.onFailure) ) {
         callbacks.onFailure(this);
       }
@@ -106,8 +116,8 @@ var ApiLoader = (function (ApiLoader, window, document)
 
   ApiLoader.load = function(api, callbacks) {
     var result = null;
-    if( !(result = apis[api]) ) {
-      result = apis[api] = new Api(api, callbacks);
+    if( !(result = apis[api.url]) ) {
+      result = apis[api.url] = new Api(api, callbacks);
     } else if( callbacks && Object.isFunction(callbacks.onSuccess) ) {
       window.setTimeout(function() { callbacks.onSuccess(result) },0);
     }
@@ -116,7 +126,7 @@ var ApiLoader = (function (ApiLoader, window, document)
 
   ApiLoader.get = function(api) {
     var result;
-    if( !(result = apis[api]) || !result.isLoaded() ) {
+    if( !(result = apis[api.url]) || !result.isLoaded() ) {
       return void(0);
     }
     return result;
